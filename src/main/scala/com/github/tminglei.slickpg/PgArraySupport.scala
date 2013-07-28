@@ -1,35 +1,37 @@
 package com.github.tminglei.slickpg
 
 import java.util.UUID
-import scala.slick.driver.{BasicProfile, PostgresDriver}
+import scala.slick.driver.PostgresDriver
 import scala.slick.lifted._
+import FunctionSymbolExtensionMethods._
 import scala.slick.ast.Library.{SqlOperator, SqlFunction}
 import scala.slick.ast.Node
 import scala.reflect.ClassTag
-import scala.slick.session.{PositionedResult, PositionedParameters}
 import org.postgresql.util.PGobject
+import scala.slick.jdbc.{PositionedResult, PositionedParameters, JdbcType}
 
 trait PgArraySupport { driver: PostgresDriver =>
+  import driver.profile.simple._
 
   trait ArrayImplicits {
     /** for type/name, @see [[org.postgresql.core.Oid]] and [[org.postgresql.jdbc2.TypeInfoCache]]*/
-    implicit val uuidListTypeMapper = new ArrayListTypeMapper[UUID]("uuid")
-    implicit val strListTypeMapper = new ArrayListTypeMapper[String]("text")
-    implicit val longListTypeMapper = new ArrayListTypeMapper[Long]("int8")
-    implicit val intListTypeMapper = new ArrayListTypeMapper[Int]("int4")
-    implicit val floatListTypeMapper = new ArrayListTypeMapper[Float]("float8")
-    implicit val boolListTypeMapper = new ArrayListTypeMapper[Boolean]("bool")
-    implicit val dateListTypeMapper = new ArrayListTypeMapper[java.sql.Date]("date")
-    implicit val timeListTypeMapper = new ArrayListTypeMapper[java.sql.Time]("time")
-    implicit val tsListTypeMapper = new ArrayListTypeMapper[java.sql.Timestamp]("timestamp")
+    implicit val uuidListJdbcType = new ArrayListJdbcType[UUID]("uuid")
+    implicit val strListJdbcType = new ArrayListJdbcType[String]("text")
+    implicit val longListJdbcType = new ArrayListJdbcType[Long]("int8")
+    implicit val intListJdbcType = new ArrayListJdbcType[Int]("int4")
+    implicit val floatListJdbcType = new ArrayListJdbcType[Float]("float8")
+    implicit val boolListJdbcType = new ArrayListJdbcType[Boolean]("bool")
+    implicit val dateListJdbcType = new ArrayListJdbcType[java.sql.Date]("date")
+    implicit val timeListJdbcType = new ArrayListJdbcType[java.sql.Time]("time")
+    implicit val timestampListJdbcType = new ArrayListJdbcType[java.sql.Timestamp]("timestamp")
 
     ///
     implicit def arrayColumnExtensionMethods[B1](c: Column[List[B1]])(
-      implicit tm: TypeMapper[B1], tm1: ArrayListTypeMapper[B1]) = {
+      implicit tm: JdbcType[B1], tm1: ArrayListJdbcType[B1]) = {
         new ArrayListColumnExtensionMethods[B1, List[B1]](c)
     	}
     implicit def arrayOptionColumnExtensionMethods[B1](c: Column[Option[List[B1]]])(
-      implicit tm: TypeMapper[B1], tm1: ArrayListTypeMapper[B1]) = {
+      implicit tm: JdbcType[B1], tm1: ArrayListJdbcType[B1]) = {
         new ArrayListColumnExtensionMethods[B1, Option[List[B1]]](c)
     	}
   }
@@ -50,48 +52,44 @@ trait PgArraySupport { driver: PostgresDriver =>
 
   /** Extension methods for array Columns */
   class ArrayListColumnExtensionMethods[B0, P1](val c: Column[P1])(
-          implicit tm0: TypeMapper[B0], tm: TypeMapper[List[B0]]) extends ExtensionMethods[List[B0], P1] {
+          implicit tm0: JdbcType[B0], tm: JdbcType[List[B0]]) extends ExtensionMethods[List[B0], P1] {
     /** required syntax: expression operator ANY (array expression) */
-    def any[R](implicit om: o#to[B0, R]) = om(ArrayLibrary.Any.column[B0](n))
+    def any[R](implicit om: o#to[B0, R]) = om.column(ArrayLibrary.Any, n)
     /** required syntax: expression operator ALL (array expression) */
-    def all[R](implicit om: o#to[B0, R]) = om(ArrayLibrary.All.column[B0](n))
+    def all[R](implicit om: o#to[B0, R]) = om.column(ArrayLibrary.All, n)
 
     def @>[P2, R](e: Column[P2])(implicit om: o#arg[List[B0], P2]#to[Boolean, R]) = {
-    		om(ArrayLibrary.Contains.column(n, Node(e)))
+    		om.column(ArrayLibrary.Contains, n, Node(e))
     	}
     def <@:[P2, R](e: Column[P2])(implicit om: o#arg[List[B0], P2]#to[Boolean, R]) = {
-        om(ArrayLibrary.ContainedBy.column(Node(e), n))
+        om.column(ArrayLibrary.ContainedBy, Node(e), n)
       }
     def @&[P2, R](e: Column[P2])(implicit om: o#arg[List[B0], P2]#to[Boolean, R]) = {
-        om(ArrayLibrary.Overlap.column(n, Node(e)))
+        om.column(ArrayLibrary.Overlap, n, Node(e))
       }
 
     def ++[P2, R](e: Column[P2])(implicit om: o#arg[List[B0], P2]#to[List[B0], R]) = {
-        om(ArrayLibrary.Concatenate.column(n, Node(e)))
+        om.column(ArrayLibrary.Concatenate, n, Node(e))
       }
     def + [P2, R](e: Column[P2])(implicit om: o#arg[B0, P2]#to[List[B0], R]) = {
-        om(ArrayLibrary.Concatenate.column(n, Node(e)))
+        om.column(ArrayLibrary.Concatenate, n, Node(e))
       }
     def +:[P2, R](e: Column[P2])(implicit om: o#arg[B0, P2]#to[List[B0], R]) = {
-        om(ArrayLibrary.Concatenate.column(Node(e), n))
+        om.column(ArrayLibrary.Concatenate, Node(e), n)
       }
     def length(dim: Column[Int] = ConstColumn(1)) = ArrayLibrary.Length.column[Int](n, Node(dim))
-    def unnest[R](implicit om: o#to[B0, R]) = om(ArrayLibrary.Unnest.column(n))
+    def unnest[R](implicit om: o#to[B0, R]) = om.column(ArrayLibrary.Unnest, n)
   }
 
   ///////////////////////////////////////////////////////////////////////////////////////
 
-  class ArrayListTypeMapper[T: ClassTag](baseType: String)
-  					extends TypeMapperDelegate[List[T]] with BaseTypeMapper[List[T]] {
+  class ArrayListJdbcType[T: ClassTag](baseType: String) extends DriverJdbcType[List[T]] {
 
-    def apply(v1: BasicProfile): TypeMapperDelegate[List[T]] = this
-
-    //----------------------------------------------------------
     def zero: List[T] = Nil
 
     def sqlType: Int = java.sql.Types.ARRAY
 
-    def sqlTypeName: String = s"$baseType ARRAY"
+    override def sqlTypeName: String = s"$baseType ARRAY"
 
     def setValue(v: List[T], p: PositionedParameters) = p.setObject(mkSqlArray(v, p), sqlType)
 

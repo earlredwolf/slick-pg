@@ -3,79 +3,81 @@ package com.github.tminglei.slickpg
 import com.vividsolutions.jts.io._
 import com.vividsolutions.jts.geom._
 import java.sql.SQLException
-import scala.slick.driver.{BasicProfile, PostgresDriver}
+import scala.slick.driver.PostgresDriver
 import scala.slick.lifted._
 import scala.slick.ast.Library.{SqlFunction, SqlOperator}
 import scala.slick.ast.{LiteralNode, Node}
-import scala.slick.session.{PositionedResult, PositionedParameters}
+import scala.slick.jdbc.{PositionedResult, PositionedParameters}
 
 trait PostGISSupport { driver: PostgresDriver =>
+  import driver.profile.simple._
 
-  trait PostGISImplicits {
-    implicit val geometryTypeMapper = new GeometryTypeMapper[Geometry]
-    implicit val pointTypeMapper = new GeometryTypeMapper[Point]
-    implicit val polygonTypeMapper = new GeometryTypeMapper[Polygon]
-    implicit val lineStringTypeMapper = new GeometryTypeMapper[LineString]
-    implicit val linearRingTypeMapper = new GeometryTypeMapper[LinearRing]
-    implicit val geometryCollectionTypeMapper = new GeometryTypeMapper[GeometryCollection]
-    implicit val multiPointTypeMapper = new GeometryTypeMapper[MultiPoint]
-    implicit val multiPolygonTypeMapper = new GeometryTypeMapper[MultiPolygon]
-    implicit val multiLineStringTypeMapper = new GeometryTypeMapper[MultiLineString]
+  private trait GeometryTypesImplicits {
+    implicit val geometryJdbcType = new GeometryJdbcType[Geometry]
+    implicit val pointJdbcType = new GeometryJdbcType[Point]
+    implicit val polygonJdbcType = new GeometryJdbcType[Polygon]
+    implicit val lineStringJdbcType = new GeometryJdbcType[LineString]
+    implicit val linearRingJdbcType = new GeometryJdbcType[LinearRing]
+    implicit val geometryCollectionJdbcType = new GeometryJdbcType[GeometryCollection]
+    implicit val multiPointJdbcType = new GeometryJdbcType[MultiPoint]
+    implicit val multiPolygonJdbcType = new GeometryJdbcType[MultiPolygon]
+    implicit val multiLineStringJdbcType = new GeometryJdbcType[MultiLineString]
+  }
 
-    ///
+  trait PostGISImplicits extends GeometryTypesImplicits {
     implicit def geometryColumnExtensionMethods[G1 <: Geometry](c: Column[G1])(
-      implicit tm: GeometryTypeMapper[G1]) = {
+      implicit tm: GeometryJdbcType[G1]) = {
     		new GeometryColumnExtensionMethods[G1](c)
     	}
     implicit def geometryOptionColumnExtensionMethods[G1 <: Geometry](c: Column[Option[G1]])(
-      implicit tm: GeometryTypeMapper[G1]) = {
+      implicit tm: GeometryJdbcType[G1]) = {
     		new GeometryColumnExtensionMethods[Option[G1]](c)
     	}
   }
 
-  trait PostGISAssistants extends PostGISImplicits {
+  trait PostGISAssistants extends GeometryTypesImplicits {
     /** Geometry Constructors */
     def geomFromText[P, R](wkt: Column[P], srid: Option[Int] = None)(
       implicit om: OptionMapperDSL.arg[String, P]#to[Geometry, R]) = srid match {
-        case Some(srid) => om(PostGISLibrary.GeomFromText.column[Geometry](Node(wkt), LiteralNode(srid)))
-        case None   => om(PostGISLibrary.GeomFromText.column[Geometry](Node(wkt)))
+        case Some(srid) => om.column(PostGISLibrary.GeomFromText, Node(wkt), LiteralNode(srid))
+        case None   => om.column(PostGISLibrary.GeomFromText, Node(wkt))
       }
     def geomFromWKB[P, R](wkb: Column[P], srid: Option[Int] = None)(
       implicit om: OptionMapperDSL.arg[Array[Byte], P]#to[Geometry, R]) = srid match {
-        case Some(srid) => om(PostGISLibrary.GeomFromWKB.column[Geometry](Node(wkb), LiteralNode(srid)))
-        case None   => om(PostGISLibrary.GeomFromWKB.column[Geometry](Node(wkb)))
+        case Some(srid) => om.column(PostGISLibrary.GeomFromWKB, Node(wkb), LiteralNode(srid))
+        case None   => om.column(PostGISLibrary.GeomFromWKB, Node(wkb))
       }
     def geomFromEWKT[P, R](ewkt: Column[P])(
       implicit om: OptionMapperDSL.arg[String, P]#to[Geometry, R]) = {
-        om(PostGISLibrary.GeomFromEWKT.column[Geometry](Node(ewkt)))
+        om.column(PostGISLibrary.GeomFromEWKT, Node(ewkt))
       }
     def geomFromEWKB[P, R](ewkb: Column[P])(
       implicit om: OptionMapperDSL.arg[Array[Byte], P]#to[Geometry, R]) = {
-        om(PostGISLibrary.GeomFromEWKB.column[Geometry](Node(ewkb)))
+        om.column(PostGISLibrary.GeomFromEWKB, Node(ewkb))
       }
     def geomFromGML[P, R](gml: Column[P], srid: Option[Int] = None)(
       implicit om: OptionMapperDSL.arg[String, P]#to[Geometry, R]) = srid match {
-        case Some(srid) => om(PostGISLibrary.GeomFromGML.column[Geometry](Node(gml), LiteralNode(srid)))
-        case None   => om(PostGISLibrary.GeomFromGML.column[Geometry](Node(gml)))
+        case Some(srid) => om.column(PostGISLibrary.GeomFromGML, Node(gml), LiteralNode(srid))
+        case None   => om.column(PostGISLibrary.GeomFromGML, Node(gml))
       }
     def geomFromKML[P, R](kml: Column[P])(
       implicit om: OptionMapperDSL.arg[String, P]#to[Geometry, R]) = {
-        om(PostGISLibrary.GeomFromKML.column[Geometry](Node(kml)))
+        om.column(PostGISLibrary.GeomFromKML, Node(kml))
       }
     def geomFromGeoJSON[P, R](json: Column[P])(
       implicit om: OptionMapperDSL.arg[String, P]#to[Geometry, R]) = {
-        om(PostGISLibrary.GeomFromGeoJSON.column[Geometry](Node(json)))
+        om.column(PostGISLibrary.GeomFromGeoJSON, Node(json))
       }
     def makeBox[P1, P2, R](lowLeftPoint: Column[P1], upRightPoint: Column[P2])(
       implicit om: OptionMapperDSL.arg[Geometry, P1]#arg[Geometry, P2]#to[Geometry, R]) = {
-        om(PostGISLibrary.MakeBox.column[Geometry](Node(lowLeftPoint), Node(upRightPoint)))
+        om.column(PostGISLibrary.MakeBox, Node(lowLeftPoint), Node(upRightPoint))
       }
     def makePoint[P1, P2, R](x: Column[P1], y: Column[P2], z: Option[Double] = None, m: Option[Double] = None)(
       implicit om: OptionMapperDSL.arg[Double, P1]#arg[Double, P2]#to[Geometry, R]) = (z, m) match {
-        case (Some(z), Some(m)) => om(PostGISLibrary.MakePoint.column[Geometry](Node(x), Node(y), LiteralNode(z), LiteralNode(m)))
-        case (Some(z), None) => om(PostGISLibrary.MakePoint.column[Geometry](Node(x), Node(y), LiteralNode(z)))
-        case (None, Some(m)) => om(PostGISLibrary.MakePointM.column[Geometry](Node(x), Node(y), Node(m)))
-        case (None, None) => om(PostGISLibrary.MakePoint.column[Geometry](Node(x), Node(y)))
+        case (Some(z), Some(m)) => om.column(PostGISLibrary.MakePoint, Node(x), Node(y), LiteralNode(z), LiteralNode(m))
+        case (Some(z), None) => om.column(PostGISLibrary.MakePoint, Node(x), Node(y), LiteralNode(z))
+        case (None, Some(m)) => om.column(PostGISLibrary.MakePointM, Node(x), Node(y), Node(m))
+        case (None, None)    => om.column(PostGISLibrary.MakePoint, Node(x), Node(y))
       }
   }
 
@@ -204,348 +206,345 @@ trait PostGISSupport { driver: PostgresDriver =>
   }
 
   /** Extension methods for hstore Columns */
-  class GeometryColumnExtensionMethods[P1](val c: Column[P1]) extends ExtensionMethods[Geometry, P1] with PostGISImplicits {
+  class GeometryColumnExtensionMethods[P1](val c: Column[P1]) extends ExtensionMethods[Geometry, P1] with GeometryTypesImplicits {
     /** Geometry Operators */
     def @&&[P2, R](geom: Column[P2])(implicit om: o#arg[Geometry, P2]#to[Boolean, R]) = {
-    		om(PostGISLibrary.BoxIntersects.column(n, Node(geom)))
+    		om.column(PostGISLibrary.BoxIntersects, n, Node(geom))
     	}
     def @&&&[P2, R](geom: Column[P2])(implicit om: o#arg[Geometry, P2]#to[Boolean, R]) = {
-    		om(PostGISLibrary.BoxIntersects3D.column(n, Node(geom)))
+    		om.column(PostGISLibrary.BoxIntersects3D, n, Node(geom))
     	}
     def @>[P2, R](geom: Column[P2])(implicit om: o#arg[Geometry, P2]#to[Boolean, R]) = {
-    		om(PostGISLibrary.BoxContains.column(n, Node(geom)))
+    		om.column(PostGISLibrary.BoxContains, n, Node(geom))
     	}
     def <@[P2, R](geom: Column[P2])(implicit om: o#arg[Geometry, P2]#to[Boolean, R]) = {
-    		om(PostGISLibrary.BoxContainedBy.column(n, Node(geom)))
+    		om.column(PostGISLibrary.BoxContainedBy, n, Node(geom))
     	}
     def <->[P2, R](geom: Column[P2])(implicit om: o#arg[Geometry, P2]#to[Double, R]) = {
-    		om(PostGISLibrary.PointDistance.column(n, Node(geom)))
+    		om.column(PostGISLibrary.PointDistance, n, Node(geom))
     	}
     def <#>[P2, R](geom: Column[P2])(implicit om: o#arg[Geometry, P2]#to[Double, R]) = {
-    		om(PostGISLibrary.BoxDistance.column(n, Node(geom)))
+    		om.column(PostGISLibrary.BoxDistance, n, Node(geom))
     	}
 
     def &<[P2, R](geom: Column[P2])(implicit om: o#arg[Geometry, P2]#to[Boolean, R]) = {
-    		om(PostGISLibrary.BoxLooseLeft.column(n, Node(geom)))
+    		om.column(PostGISLibrary.BoxLooseLeft, n, Node(geom))
     	}
     def <<[P2, R](geom: Column[P2])(implicit om: o#arg[Geometry, P2]#to[Boolean, R]) = {
-        om(PostGISLibrary.BoxStrictLeft.column(n, Node(geom)))
+        om.column(PostGISLibrary.BoxStrictLeft, n, Node(geom))
       }
     def &<|[P2, R](geom: Column[P2])(implicit om: o#arg[Geometry, P2]#to[Boolean, R]) = {
-        om(PostGISLibrary.BoxLooseBelow.column(n, Node(geom)))
+        om.column(PostGISLibrary.BoxLooseBelow, n, Node(geom))
       }
     def <<|[P2, R](geom: Column[P2])(implicit om: o#arg[Geometry, P2]#to[Boolean, R]) = {
-        om(PostGISLibrary.BoxStrictBelow.column(n, Node(geom)))
+        om.column(PostGISLibrary.BoxStrictBelow, n, Node(geom))
       }
     def &>[P2, R](geom: Column[P2])(implicit om: o#arg[Geometry, P2]#to[Boolean, R]) = {
-        om(PostGISLibrary.BoxLooseRight.column(n, Node(geom)))
+        om.column(PostGISLibrary.BoxLooseRight, n, Node(geom))
       }
     def >>[P2, R](geom: Column[P2])(implicit om: o#arg[Geometry, P2]#to[Boolean, R]) = {
-        om(PostGISLibrary.BoxStrictRight.column(n, Node(geom)))
+        om.column(PostGISLibrary.BoxStrictRight, n, Node(geom))
       }
     def |&>[P2, R](geom: Column[P2])(implicit om: o#arg[Geometry, P2]#to[Boolean, R]) = {
-        om(PostGISLibrary.BoxLooseAbove.column(n, Node(geom)))
+        om.column(PostGISLibrary.BoxLooseAbove, n, Node(geom))
       }
     def |>>[P2, R](geom: Column[P2])(implicit om: o#arg[Geometry, P2]#to[Boolean, R]) = {
-        om(PostGISLibrary.BoxStrictAbove.column(n, Node(geom)))
+        om.column(PostGISLibrary.BoxStrictAbove, n, Node(geom))
       }
 
     /** Geometry Accessors */
     def geomType[R](implicit om: o#to[String, R]) = {
-        om(PostGISLibrary.GeometryType.column(n))
+        om.column(PostGISLibrary.GeometryType, n)
       }
     def srid[R](implicit om: o#to[Int, R]) = {
-        om(PostGISLibrary.SRID.column(n))
+        om.column(PostGISLibrary.SRID, n)
       }
     def isValid[R](implicit om: o#to[Boolean, R]) = {
-        om(PostGISLibrary.IsValid.column(n))
+        om.column(PostGISLibrary.IsValid, n)
       }
     def isClosed[R](implicit om: o#to[Boolean, R]) = {
-        om(PostGISLibrary.IsClosed.column(n))
+        om.column(PostGISLibrary.IsClosed, n)
       }
     def isCollection[R](implicit om: o#to[Boolean, R]) = {
-        om(PostGISLibrary.IsCollection.column(n))
+        om.column(PostGISLibrary.IsCollection, n)
       }
     def isEmpty[R](implicit om: o#to[Boolean, R]) = {
-        om(PostGISLibrary.IsEmpty.column(n))
+        om.column(PostGISLibrary.IsEmpty, n)
       }
     def isRing[R](implicit om: o#to[Boolean, R]) = {
-        om(PostGISLibrary.IsRing.column(n))
+        om.column(PostGISLibrary.IsRing, n)
       }
     def isSimple[R](implicit om: o#to[Boolean, R]) = {
-        om(PostGISLibrary.IsSimple.column(n))
+        om.column(PostGISLibrary.IsSimple, n)
       }
     def hasArc[R](implicit om: o#to[Boolean, R]) = {
-        om(PostGISLibrary.HasArc.column[Boolean](n))
+        om.column(PostGISLibrary.HasArc, n)
       }
     def area[R](implicit om: o#to[Float, R]) = {
-        om(PostGISLibrary.Area.column(n))
+        om.column(PostGISLibrary.Area, n)
       }
     def boundary[R](implicit om: o#to[Geometry, R]) = {
-        om(PostGISLibrary.Boundary.column(n))
+        om.column(PostGISLibrary.Boundary, n)
       }
     def dimension[R](implicit om: o#to[Int, R]) = {
-        om(PostGISLibrary.Dimension.column(n))
+        om.column(PostGISLibrary.Dimension, n)
       }
     def coordDim[R](implicit om: o#to[Int, R]) = {
-        om(PostGISLibrary.CoordDim.column(n))
+        om.column(PostGISLibrary.CoordDim, n)
       }
     def nDims[R](implicit om: o#to[Int, R]) = {
-        om(PostGISLibrary.NDims.column(n))
+        om.column(PostGISLibrary.NDims, n)
       }
     def nPoints[R](implicit om: o#to[Int, R]) = {
-        om(PostGISLibrary.NPoints.column(n))
+        om.column(PostGISLibrary.NPoints, n)
       }
     def nRings[R](implicit om: o#to[Int, R]) = {
-        om(PostGISLibrary.NRings.column(n))
+        om.column(PostGISLibrary.NRings, n)
       }
 
     /** Geometry Outputs */
     def asBinary[R](NDRorXDR: Option[String] = None)(implicit om: o#to[Array[Byte], R]) = NDRorXDR match {
-        case Some(endian) => om(PostGISLibrary.AsBinary.column(n, LiteralNode(endian)))
-        case None   => om(PostGISLibrary.AsBinary.column(n))
+        case Some(endian) => om.column(PostGISLibrary.AsBinary, n, LiteralNode(endian))
+        case None   => om.column(PostGISLibrary.AsBinary, n)
       }
     def asText[R](implicit om: o#to[String, R]) = {
-        om(PostGISLibrary.AsText.column(n))
+        om.column(PostGISLibrary.AsText, n)
       }
     def asLatLonText[R](format: Option[String] = None)(implicit om: o#to[String, R]) = format match {
-        case Some(fmt) => om(PostGISLibrary.AsLatLonText.column(n, LiteralNode(fmt)))
-        case None   => om(PostGISLibrary.AsLatLonText.column(n))
+        case Some(fmt) => om.column(PostGISLibrary.AsLatLonText, n, LiteralNode(fmt))
+        case None   => om.column(PostGISLibrary.AsLatLonText, n)
       }
     def asEWKB[R](NDRorXDR: Option[String] = None)(implicit om: o#to[Array[Byte], R]) = NDRorXDR match {
-        case Some(endian) => om(PostGISLibrary.AsEWKB.column(n, LiteralNode(endian)))
-        case None   => om(PostGISLibrary.AsEWKB.column(n))
+        case Some(endian) => om.column(PostGISLibrary.AsEWKB, n, LiteralNode(endian))
+        case None   => om.column(PostGISLibrary.AsEWKB, n)
       }
     def asEWKT[R](implicit om: o#to[String, R]) = {
-        om(PostGISLibrary.AsEWKT.column(n))
+        om.column(PostGISLibrary.AsEWKT, n)
       }
     def asHEXEWKB[R](NDRorXDR: Option[String] = None)(implicit om: o#to[String, R]) = NDRorXDR match {
-        case Some(endian) => om(PostGISLibrary.AsHEXEWKB.column(n, LiteralNode(endian)))
-        case None   => om(PostGISLibrary.AsHEXEWKB.column(n))
+        case Some(endian) => om.column(PostGISLibrary.AsHEXEWKB, n, LiteralNode(endian))
+        case None   => om.column(PostGISLibrary.AsHEXEWKB, n)
       }
     def asGeoJSON[R](maxDigits: Column[Int] = ConstColumn(15), options: Column[Int] = ConstColumn(0),
       geoJsonVer: Option[Int] = None)(implicit om: o#to[String, R]) = geoJsonVer match {
-        case Some(ver) => om(PostGISLibrary.AsGeoJSON.column(LiteralNode(ver), n, Node(maxDigits), Node(options)))
-        case None   => om(PostGISLibrary.AsGeoJSON.column(n, Node(maxDigits), Node(options)))
+        case Some(ver) => om.column(PostGISLibrary.AsGeoJSON, LiteralNode(ver), n, Node(maxDigits), Node(options))
+        case None   => om.column(PostGISLibrary.AsGeoJSON, n, Node(maxDigits), Node(options))
       }
     def asGeoHash[R](maxChars: Option[Int] = None)(implicit om: o#to[String, R]) = maxChars match {
-        case Some(charNum) => om(PostGISLibrary.AsHEXEWKB.column(n, LiteralNode(charNum)))
-        case None   => om(PostGISLibrary.AsHEXEWKB.column(n))
+        case Some(charNum) => om.column(PostGISLibrary.AsHEXEWKB, n, LiteralNode(charNum))
+        case None   => om.column(PostGISLibrary.AsHEXEWKB, n)
       }
     def asGML[R](maxDigits: Column[Int] = ConstColumn(15), options: Column[Int] = ConstColumn(0),
       version: Option[Int] = None,  nPrefix: Option[String] = None)(implicit om: o#to[String, R]) = (version, nPrefix) match {
-        case (Some(ver), Some(prefix)) => om(PostGISLibrary.AsGML.column(LiteralNode(ver), n, Node(maxDigits), Node(options), LiteralNode(prefix)))
-        case (Some(ver), None) => om(PostGISLibrary.AsGML.column(LiteralNode(ver), n, Node(maxDigits), Node(options)))
-        case (_, _)   => om(PostGISLibrary.AsGML.column(n, Node(maxDigits), Node(options)))
+        case (Some(ver), Some(prefix)) => om.column(PostGISLibrary.AsGML, LiteralNode(ver), n, Node(maxDigits), Node(options), LiteralNode(prefix))
+        case (Some(ver), None) => om.column(PostGISLibrary.AsGML, LiteralNode(ver), n, Node(maxDigits), Node(options))
+        case (_, _)   => om.column(PostGISLibrary.AsGML, n, Node(maxDigits), Node(options))
       }
     def asKML[R](maxDigits: Column[Int] = ConstColumn(15), version: Option[Int] = None,  nPrefix: Option[String] = None)(
       implicit om: o#to[String, R]) = (version, nPrefix) match {
-        case (Some(ver), Some(prefix)) => om(PostGISLibrary.AsKML.column(LiteralNode(ver), n, Node(maxDigits), LiteralNode(prefix)))
-        case (Some(ver), None) => om(PostGISLibrary.AsKML.column(LiteralNode(ver), n, Node(maxDigits)))
-        case (_, _)   => om(PostGISLibrary.AsKML.column(n, Node(maxDigits)))
+        case (Some(ver), Some(prefix)) => om.column(PostGISLibrary.AsKML, LiteralNode(ver), n, Node(maxDigits), LiteralNode(prefix))
+        case (Some(ver), None) => om.column(PostGISLibrary.AsKML, LiteralNode(ver), n, Node(maxDigits))
+        case (_, _)   => om.column(PostGISLibrary.AsKML, n, Node(maxDigits))
       }
     def asSVG[R](rel: Column[Int] = ConstColumn(0), maxDigits: Column[Int] = ConstColumn(15))(
       implicit om: o#to[String, R]) = {
-        om(PostGISLibrary.AsSVG.column(n, Node(rel), Node(maxDigits)))
+        om.column(PostGISLibrary.AsSVG, n, Node(rel), Node(maxDigits))
       }
     def asX3D[R](maxDigits: Column[Int] = ConstColumn(15), options: Column[Int] = ConstColumn(0))(
       implicit om: o#to[String, R]) = {
-        om(PostGISLibrary.AsX3D.column(n, Node(maxDigits), Node(options)))
+        om.column(PostGISLibrary.AsX3D, n, Node(maxDigits), Node(options))
       }
 
     /** Spatial Relationships */
     def gEquals[P2, R](geom: Column[P2])(implicit om: o#arg[Geometry, P2]#to[Boolean, R]) = {
-        om(PostGISLibrary.Equals.column(n, Node(geom)))
+        om.column(PostGISLibrary.Equals, n, Node(geom))
       }
     def orderingEquals[P2, R](geom: Column[P2])(implicit om: o#arg[Geometry, P2]#to[Boolean, R]) = {
-        om(PostGISLibrary.OrderingEquals.column(n, Node(geom)))
+        om.column(PostGISLibrary.OrderingEquals, n, Node(geom))
       }
     def overlaps[P2, R](geom: Column[P2])(implicit om: o#arg[Geometry, P2]#to[Boolean, R]) = {
-        om(PostGISLibrary.Overlaps.column(n, Node(geom)))
+        om.column(PostGISLibrary.Overlaps, n, Node(geom))
       }
     def intersects[P2, R](geom: Column[P2])(implicit om: o#arg[Geometry, P2]#to[Boolean, R]) = {
-        om(PostGISLibrary.Intersects.column(n, Node(geom)))
+        om.column(PostGISLibrary.Intersects, n, Node(geom))
       }
     def crosses[P2, R](geom: Column[P2])(implicit om: o#arg[Geometry, P2]#to[Boolean, R]) = {
-        om(PostGISLibrary.Crosses.column(n, Node(geom)))
+        om.column(PostGISLibrary.Crosses, n, Node(geom))
       }
     def disjoint[P2, R](geom: Column[P2])(implicit om: o#arg[Geometry, P2]#to[Boolean, R]) = {
-        om(PostGISLibrary.Disjoint.column(n, Node(geom)))
+        om.column(PostGISLibrary.Disjoint, n, Node(geom))
       }
     def contains[P2, R](geom: Column[P2])(implicit om: o#arg[Geometry, P2]#to[Boolean, R]) = {
-        om(PostGISLibrary.Contains.column(n, Node(geom)))
+        om.column(PostGISLibrary.Contains, n, Node(geom))
       }
     def containsProperly[P2, R](geom: Column[P2])(implicit om: o#arg[Geometry, P2]#to[Boolean, R]) = {
-        om(PostGISLibrary.ContainsProperly.column(n, Node(geom)))
+        om.column(PostGISLibrary.ContainsProperly, n, Node(geom))
       }
     def within[P2, R](geom: Column[P2])(implicit om: o#arg[Geometry, P2]#to[Boolean, R]) = {
-        om(PostGISLibrary.Within.column(n, Node(geom)))
+        om.column(PostGISLibrary.Within, n, Node(geom))
       }
     def dWithin[P2, R](geom: Column[P2], distance: Column[Double])(
       implicit om: o#arg[Geometry, P2]#to[Boolean, R]) = {
-        om(PostGISLibrary.DWithin.column(n, Node(geom), Node(distance)))
+        om.column(PostGISLibrary.DWithin, n, Node(geom), Node(distance))
       }
     def dFullyWithin[P2, R](geom: Column[P2], distance: Column[Double])(
       implicit om: o#arg[Geometry, P2]#to[Boolean, R]) = {
-        om(PostGISLibrary.DFullyWithin.column(n, Node(geom), Node(distance)))
+        om.column(PostGISLibrary.DFullyWithin, n, Node(geom), Node(distance))
       }
     def touches[P2, R](geom: Column[P2])(implicit om: o#arg[Geometry, P2]#to[Boolean, R]) = {
-        om(PostGISLibrary.Touches.column(n, Node(geom)))
+        om.column(PostGISLibrary.Touches, n, Node(geom))
       }
     def relate[P2, R](geom: Column[P2], matrixPattern: Column[String])(
       implicit om: o#arg[Geometry, P2]#to[Boolean, R]) = {
-        om(PostGISLibrary.Relate.column(n, Node(geom), Node(matrixPattern)))
+        om.column(PostGISLibrary.Relate, n, Node(geom), Node(matrixPattern))
       }
     def relatePattern[P2, R](geom: Column[P2], boundaryNodeRule: Option[Int] = None)(
       implicit om: o#arg[Geometry, P2]#to[String, R]) = boundaryNodeRule match {
-        case Some(rule) => om(PostGISLibrary.Relate.column(n, Node(geom), LiteralNode(rule)))
-        case None    => om(PostGISLibrary.Relate.column(n, Node(geom)))
+        case Some(rule) => om.column(PostGISLibrary.Relate, n, Node(geom), LiteralNode(rule))
+        case None    => om.column(PostGISLibrary.Relate, n, Node(geom))
       }
 
     /** Spatial Measurements */
     def azimuth[P2, R](geom: Column[P2])(implicit om: o#arg[Geometry, P2]#to[Float, R]) = {
-        om(PostGISLibrary.Azimuth.column(n, Node(geom)))
+        om.column(PostGISLibrary.Azimuth, n, Node(geom))
       }
     def centroid[R](implicit om: o#to[Point, R]) = {
-        om(PostGISLibrary.Centroid.column[Point](n))
+        om.column(PostGISLibrary.Centroid, n)
       }
     def closestPoint[P2, R](geom: Column[P2])(implicit om: o#arg[Geometry, P2]#to[Point, R]) = {
-        om(PostGISLibrary.ClosestPoint.column(n, Node(geom)))
+        om.column(PostGISLibrary.ClosestPoint, n, Node(geom))
       }
     def pointOnSurface[R](implicit om: o#to[Point, R]) = {
-        om(PostGISLibrary.PointOnSurface.column[Point](n))
+        om.column(PostGISLibrary.PointOnSurface, n)
       }
     def project[R](distance: Column[Float], azimuth: Column[Float])(implicit om: o#to[Point, R]) = {
-        om(PostGISLibrary.Project.column[Point](n, Node(distance), Node(azimuth)))
+        om.column(PostGISLibrary.Project, n, Node(distance), Node(azimuth))
       }
     def length[R](implicit om: o#to[Float, R]) = {
-        om(PostGISLibrary.Length.column[Float](n))
+        om.column(PostGISLibrary.Length, n)
       }
     def length3d[R](implicit om: o#to[Float, R]) = {
-        om(PostGISLibrary.Length3D.column[Float](n))
+        om.column(PostGISLibrary.Length3D, n)
       }
     def perimeter[R](implicit om: o#to[Float, R]) = {
-        om(PostGISLibrary.Perimeter.column[Float](n))
+        om.column(PostGISLibrary.Perimeter, n)
       }
     def distance[P2, R](geom: Column[P2])(implicit om: o#arg[Geometry, P2]#to[Float, R]) = {
-        om(PostGISLibrary.Distance.column(n, Node(geom)))
+        om.column(PostGISLibrary.Distance, n, Node(geom))
       }
     def distanceSphere[P2, R](geom: Column[P2])(implicit om: o#arg[Geometry, P2]#to[Float, R]) = {
-        om(PostGISLibrary.DistanceSphere.column(n, Node(geom)))
+        om.column(PostGISLibrary.DistanceSphere, n, Node(geom))
       }
     def maxDistance[P2, R](geom: Column[P2])(implicit om: o#arg[Geometry, P2]#to[Float, R]) = {
-        om(PostGISLibrary.MaxDistance.column(n, Node(geom)))
+        om.column(PostGISLibrary.MaxDistance, n, Node(geom))
       }
     def hausdorffDistance[P2, R](geom: Column[P2], densifyFrac: Option[Float] = None)(
       implicit om: o#arg[Geometry, P2]#to[Float, R]) = densifyFrac match {
-        case Some(denFrac) => om(PostGISLibrary.HausdorffDistance.column(n, Node(geom), LiteralNode(denFrac)))
-        case None   => om(PostGISLibrary.HausdorffDistance.column(n, Node(geom)))
+        case Some(denFrac) => om.column(PostGISLibrary.HausdorffDistance, n, Node(geom), LiteralNode(denFrac))
+        case None   => om.column(PostGISLibrary.HausdorffDistance, n, Node(geom))
       }
     def longestLine[P2, R](geom: Column[P2])(implicit om: o#arg[Geometry, P2]#to[LineString, R]) = {
-        om(PostGISLibrary.LongestLine.column[LineString](n, Node(geom)))
+        om.column(PostGISLibrary.LongestLine, n, Node(geom))
       }
     def shortestLine[P2, R](geom: Column[P2])(implicit om: o#arg[Geometry, P2]#to[LineString, R]) = {
-        om(PostGISLibrary.ShortestLine.column[LineString](n, Node(geom)))
+        om.column(PostGISLibrary.ShortestLine, n, Node(geom))
       }
 
     /** Geometry Processing */
     def setSRID[R](srid: Column[Int])(implicit om: o#to[Geometry, R]) = {
-        om(PostGISLibrary.SetSRID.column[Geometry](n, Node(srid)))
+        om.column(PostGISLibrary.SetSRID, n, Node(srid))
       }
     def transform[R](srid: Column[Int])(implicit om: o#to[Geometry, R]) = {
-        om(PostGISLibrary.Transform.column[Geometry](n, Node(srid)))
+        om.column(PostGISLibrary.Transform, n, Node(srid))
       }
     def simplify[R](tolerance: Column[Float])(implicit om: o#to[Geometry, R]) = {
-        om(PostGISLibrary.Simplify.column[Geometry](n, Node(tolerance)))
+        om.column(PostGISLibrary.Simplify, n, Node(tolerance))
       }
     def removeRepeatedPoints[R](implicit om: o#to[Geometry, R]) = {
-        om(PostGISLibrary.RemoveRepeatedPoints.column[Geometry](n))
+        om.column(PostGISLibrary.RemoveRepeatedPoints, n)
       }
     def simplifyPreserveTopology[R](tolerance: Column[Float])(implicit om: o#to[Geometry, R]) = {
-        om(PostGISLibrary.SimplifyPreserveTopology.column[Geometry](n, Node(tolerance)))
+        om.column(PostGISLibrary.SimplifyPreserveTopology, n, Node(tolerance))
       }
     def difference[P2, R](geom: Column[P2])(implicit om: o#arg[Geometry, P2]#to[Geometry, R]) = {
-        om(PostGISLibrary.Difference.column[Geometry](n, Node(geom)))
+        om.column(PostGISLibrary.Difference, n, Node(geom))
       }
     def symDifference[P2, R](geom: Column[P2])(implicit om: o#arg[Geometry, P2]#to[Geometry, R]) = {
-        om(PostGISLibrary.SymDifference.column[Geometry](n, Node(geom)))
+        om.column(PostGISLibrary.SymDifference, n, Node(geom))
       }
     def intersection[P2, R](geom: Column[P2])(implicit om: o#arg[Geometry, P2]#to[Geometry, R]) = {
-        om(PostGISLibrary.Intersection.column[Geometry](n, Node(geom)))
+        om.column(PostGISLibrary.Intersection, n, Node(geom))
       }
     def sharedPaths[P2, R](geom: Column[P2])(implicit om: o#arg[Geometry, P2]#to[Geometry, R]) = {
-        om(PostGISLibrary.SharedPaths.column[Geometry](n, Node(geom)))
+        om.column(PostGISLibrary.SharedPaths, n, Node(geom))
       }
     def split[P2, R](blade: Column[P2])(implicit om: o#arg[Geometry, P2]#to[Geometry, R]) = {
-        om(PostGISLibrary.Split.column[Geometry](n, Node(blade)))
+        om.column(PostGISLibrary.Split, n, Node(blade))
       }
     def minBoundingCircle[R](segNumPerQtrCircle: Column[Int] = ConstColumn(48))(implicit om: o#to[Geometry, R]) = {
-        om(PostGISLibrary.MinBoundingCircle.column[Geometry](n, Node(segNumPerQtrCircle)))
+        om.column(PostGISLibrary.MinBoundingCircle, n, Node(segNumPerQtrCircle))
       }
 
     def buffer[R](radius: Column[Float], bufferStyles: Option[String] = None)(
       implicit om: o#to[Geometry, R]) = bufferStyles match {
-        case Some(styles) => om(PostGISLibrary.Buffer.column[Geometry](n, Node(radius), Node(styles)))
-        case None   =>  om(PostGISLibrary.Buffer.column[Geometry](n, Node(radius)))
+        case Some(styles) => om.column(PostGISLibrary.Buffer, n, Node(radius), Node(styles))
+        case None   =>  om.column(PostGISLibrary.Buffer, n, Node(radius))
       }
     def multi[R](implicit om: o#to[Geometry, R]) = {
-        om(PostGISLibrary.Multi.column[Geometry](n))
+        om.column(PostGISLibrary.Multi, n)
       }
     def lineMerge[R](implicit om: o#to[Geometry, R]) = {
-        om(PostGISLibrary.LineMerge.column[Geometry](n))
+        om.column(PostGISLibrary.LineMerge, n)
       }
     def collectionExtract[R](tpe: Column[Int])(implicit om: o#to[Geometry, R]) = {
-        om(PostGISLibrary.CollectionExtract.column[Geometry](n, Node(tpe)))
+        om.column(PostGISLibrary.CollectionExtract, n, Node(tpe))
       }
     def collectionHomogenize[R](implicit om: o#to[Geometry, R]) = {
-        om(PostGISLibrary.CollectionHomogenize.column[Geometry](n))
+        om.column(PostGISLibrary.CollectionHomogenize, n)
       }
     def addPoint[P2, R](point: Column[P2], position: Option[Int] = None)(
       implicit om: o#arg[Geometry, P2]#to[Geometry, R]) = position match {
-        case Some(pos) => om(PostGISLibrary.AddPoint.column[Geometry](n, Node(point), Node(pos)))
-        case None   =>  om(PostGISLibrary.AddPoint.column[Geometry](n, Node(point)))
+        case Some(pos) => om.column(PostGISLibrary.AddPoint, n, Node(point), Node(pos))
+        case None   =>  om.column(PostGISLibrary.AddPoint, n, Node(point))
       }
     def setPoint[P2, R](point: Column[P2], position: Column[Int])(
       implicit om: o#arg[Geometry, P2]#to[Geometry, R]) = {
-        om(PostGISLibrary.SetPoint.column[Geometry](n, Node(position), Node(point)))
+        om.column(PostGISLibrary.SetPoint, n, Node(position), Node(point))
       }
     def removePoint[R](offset: Column[Int])(implicit om: o#to[Geometry, R]) = {
-        om(PostGISLibrary.RemovePoint.column[Geometry](n, Node(offset)))
+        om.column(PostGISLibrary.RemovePoint, n, Node(offset))
       }
     def reverse[R](implicit om: o#to[Geometry, R]) = {
-        om(PostGISLibrary.Reverse.column[Geometry](n))
+        om.column(PostGISLibrary.Reverse, n)
       }
     def scale[R](xFactor: Column[Float], yFactor: Column[Float], zFactor: Option[Float] = None)(
       implicit om: o#to[Geometry, R]) = zFactor match {
-        case Some(zFac) => om(PostGISLibrary.Scale.column[Geometry](n, Node(xFactor), Node(yFactor), LiteralNode(zFac)))
-        case None   =>  om(PostGISLibrary.Scale.column[Geometry](n, Node(xFactor), Node(yFactor)))
+        case Some(zFac) => om.column(PostGISLibrary.Scale, n, Node(xFactor), Node(yFactor), LiteralNode(zFac))
+        case None   =>  om.column(PostGISLibrary.Scale, n, Node(xFactor), Node(yFactor))
       }
     def segmentize[R](maxLength: Column[Float])(implicit om: o#to[Geometry, R]) = {
-        om(PostGISLibrary.Segmentize.column[Geometry](n, Node(maxLength)))
+        om.column(PostGISLibrary.Segmentize, n, Node(maxLength))
       }
     def snap[P2, R](reference: Column[P2], tolerance: Column[Float])(
       implicit om: o#arg[Geometry, P2]#to[Geometry, R]) = {
-        om(PostGISLibrary.Snap.column[Geometry](n, Node(reference), Node(tolerance)))
+        om.column(PostGISLibrary.Snap, n, Node(reference), Node(tolerance))
       }
     def translate[R](deltaX: Column[Float], deltaY: Column[Float], deltaZ: Option[Float] = None)(
       implicit om: o#to[Geometry, R]) = deltaZ match {
-        case Some(deltaZ) => om(PostGISLibrary.Translate.column[Geometry](n, Node(deltaX), Node(deltaY), LiteralNode(deltaZ)))
-        case None   =>  om(PostGISLibrary.Translate.column[Geometry](n, Node(deltaX), Node(deltaY)))
+        case Some(deltaZ) => om.column(PostGISLibrary.Translate, n, Node(deltaX), Node(deltaY), LiteralNode(deltaZ))
+        case None   =>  om.column(PostGISLibrary.Translate, n, Node(deltaX), Node(deltaY))
       }
   }
 
   //////////////////////////////////////////////////////////////////////////////////
 
-  class GeometryTypeMapper[T <: Geometry] extends TypeMapperDelegate[T] with BaseTypeMapper[T] {
+  class GeometryJdbcType[T <: Geometry] extends DriverJdbcType[T] {
     
-    def apply(v1: BasicProfile): TypeMapperDelegate[T] = this
-
-    //--------------------------------------------------------
     def zero: T = null.asInstanceOf[T]
 
     def sqlType: Int = java.sql.Types.OTHER
 
-    def sqlTypeName: String = "geometry"
+    override def sqlTypeName: String = "geometry"
 
     def setValue(v: T, p: PositionedParameters) = p.setBytes(toBytes(v))
 

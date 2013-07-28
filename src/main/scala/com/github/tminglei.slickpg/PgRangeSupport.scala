@@ -1,14 +1,16 @@
 package com.github.tminglei.slickpg
 
 import java.sql.{Date, Timestamp}
-import scala.slick.driver.{BasicProfile, PostgresDriver}
+import scala.slick.driver.PostgresDriver
 import scala.slick.lifted._
+import FunctionSymbolExtensionMethods._
 import scala.slick.ast.Library.SqlOperator
 import scala.slick.ast.{Library, Node}
-import scala.slick.session.{PositionedResult, PositionedParameters}
 import org.postgresql.util.PGobject
+import scala.slick.jdbc.{PositionedResult, PositionedParameters, JdbcType}
 
 trait PgRangeSupport { driver: PostgresDriver =>
+  import driver.profile.simple._
 
   private val tsFormatter = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
   private val dateFormatter = new java.text.SimpleDateFormat("yyyy-MM-dd")
@@ -16,18 +18,18 @@ trait PgRangeSupport { driver: PostgresDriver =>
   private def toSQLDate(str: String) = new Date(dateFormatter.parse(str).getTime)
 
   trait RangeImplicits {
-    implicit val intRangeTypeMapper = new RangeTypeMapper[Int]("int4range", Range.mkParser(_.toInt))
-    implicit val longRangeTypeMapper = new RangeTypeMapper[Long]("int8range", Range.mkParser(_.toLong))
-    implicit val floatRangeTypeMapper = new RangeTypeMapper[Float]("numrange", Range.mkParser(_.toFloat))
-    implicit val timestampRangeTypeMapper = new RangeTypeMapper[Timestamp]("tsrange", Range.mkParser(toTimestamp))
-    implicit val dateRangeTypeMapper = new RangeTypeMapper[Date]("daterange", Range.mkParser(toSQLDate))
+    implicit val intRangeJdbcType = new RangeJdbcType[Int]("int4range", Range.mkParser(_.toInt))
+    implicit val longRangeJdbcType = new RangeJdbcType[Long]("int8range", Range.mkParser(_.toLong))
+    implicit val floatRangeJdbcType = new RangeJdbcType[Float]("numrange", Range.mkParser(_.toFloat))
+    implicit val timestampRangeJdbcType = new RangeJdbcType[Timestamp]("tsrange", Range.mkParser(toTimestamp))
+    implicit val dateRangeJdbcType = new RangeJdbcType[Date]("daterange", Range.mkParser(toSQLDate))
 
     implicit def rangeColumnExtensionMethods[B0](c: Column[Range[B0]])(
-      implicit tm: TypeMapper[B0], tm1: RangeTypeMapper[B0]) = {
+      implicit tm: JdbcType[B0], tm1: RangeJdbcType[B0]) = {
         new RangeColumnExtensionMethods[B0, Range[B0]](c)
       }
     implicit def rangeOptionColumnExtensionMethods[B0](c: Column[Option[Range[B0]]])(
-      implicit tm: TypeMapper[B0], tm1: RangeTypeMapper[B0]) = {
+      implicit tm: JdbcType[B0], tm1: RangeJdbcType[B0]) = {
         new RangeColumnExtensionMethods[B0, Option[Range[B0]]](c)
       }
   }
@@ -50,63 +52,59 @@ trait PgRangeSupport { driver: PostgresDriver =>
   }
 
   class RangeColumnExtensionMethods[B0, P1](val c: Column[P1])(
-              implicit tm: TypeMapper[B0], tm1: TypeMapper[Range[B0]]) extends ExtensionMethods[Range[B0], P1] {
+              implicit tm: JdbcType[B0], tm1: JdbcType[Range[B0]]) extends ExtensionMethods[Range[B0], P1] {
 
     def @>^[P2, R](e: Column[P2])(implicit om: o#arg[B0, P2]#to[Boolean, R]) = {
-        om(RangeLibrary.Contains.column(n, Node(Library.Cast.column[B0](e.nodeDelegate))))
+        om.column(RangeLibrary.Contains, n, Node(Library.Cast.column(e.nodeDelegate)))
       }
     def @>[P2, R](e: Column[P2])(implicit om: o#arg[Range[B0], P2]#to[Boolean, R]) = {
-        om(RangeLibrary.Contains.column(n, Node(e)))
+        om.column(RangeLibrary.Contains, n, Node(e))
       }
     def <@^:[P2, R](e: Column[P2])(implicit om: o#arg[B0, P2]#to[Boolean, R]) = {
-        om(RangeLibrary.ContainedBy.column(Node(Library.Cast.column[B0](e.nodeDelegate)), n))
+        om.column(RangeLibrary.ContainedBy, Node(Library.Cast.column(e.nodeDelegate), n))
       }
     def <@:[P2, R](e: Column[P2])(implicit om: o#arg[Range[B0], P2]#to[Boolean, R]) = {
-        om(RangeLibrary.ContainedBy.column(Node(e), n))
+        om.column(RangeLibrary.ContainedBy, Node(e), n)
       }
     def @&[P2, R](e: Column[P2])(implicit om: o#arg[Range[B0], P2]#to[Boolean, R]) = {
-        om(RangeLibrary.Overlap.column(n, Node(e)))
+        om.column(RangeLibrary.Overlap, n, Node(e))
       }
     def <<[P2, R](e: Column[P2])(implicit om: o#arg[Range[B0], P2]#to[Boolean, R]) = {
-        om(RangeLibrary.StrictLeft.column(n, Node(e)))
+        om.column(RangeLibrary.StrictLeft, n, Node(e))
       }
     def >>[P2, R](e: Column[P2])(implicit om: o#arg[Range[B0], P2]#to[Boolean, R]) = {
-        om(RangeLibrary.StrictRight.column(n, Node(e)))
+        om.column(RangeLibrary.StrictRight, n, Node(e))
       }
     def &<[P2, R](e: Column[P2])(implicit om: o#arg[Range[B0], P2]#to[Boolean, R]) = {
-        om(RangeLibrary.NotExtendRight.column(n, Node(e)))
+        om.column(RangeLibrary.NotExtendRight, n, Node(e))
       }
     def &>[P2, R](e: Column[P2])(implicit om: o#arg[Range[B0], P2]#to[Boolean, R]) = {
-        om(RangeLibrary.NotExtendLeft.column(n, Node(e)))
+        om.column(RangeLibrary.NotExtendLeft, n, Node(e))
       }
     def -|-[P2, R](e: Column[P2])(implicit om: o#arg[Range[B0], P2]#to[Boolean, R]) = {
-        om(RangeLibrary.Adjacent.column(n, Node(e)))
+        om.column(RangeLibrary.Adjacent, n, Node(e))
       }
 
     def + [P2, R](e: Column[P2])(implicit om: o#arg[Range[B0], P2]#to[Range[B0], R]) = {
-        om(RangeLibrary.Union.column(n, Node(e)))
+        om.column(RangeLibrary.Union, n, Node(e))
       }
     def * [P2, R](e: Column[P2])(implicit om: o#arg[Range[B0], P2]#to[Range[B0], R]) = {
-        om(RangeLibrary.Intersection.column(n, Node(e)))
+        om.column(RangeLibrary.Intersection, n, Node(e))
       }
     def - [P2, R](e: Column[P2])(implicit om: o#arg[Range[B0], P2]#to[Range[B0], R]) = {
-        om(RangeLibrary.Subtraction.column(n, Node(e)))
+        om.column(RangeLibrary.Subtraction, n, Node(e))
       }
   }
 
   ///////////////////////////////////////////////////////////////////////////////
 
-  class RangeTypeMapper[T](rangeType: String, parser: (String => Range[T]))
-              extends TypeMapperDelegate[Range[T]] with BaseTypeMapper[Range[T]] {
+  class RangeJdbcType[T](rangeType: String, parser: (String => Range[T])) extends DriverJdbcType[Range[T]] {
 
-    def apply(v1: BasicProfile): TypeMapperDelegate[Range[T]] = this
-
-    //-----------------------------------------------------------------
     def zero: Range[T] = null.asInstanceOf[Range[T]]
 
     def sqlType: Int = java.sql.Types.OTHER
 
-    def sqlTypeName: String = rangeType
+    override def sqlTypeName: String = rangeType
 
     def setValue(v: Range[T], p: PositionedParameters) = p.setObject(mkPgObject(v), sqlType)
 

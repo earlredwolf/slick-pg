@@ -1,24 +1,26 @@
 package com.github.tminglei.slickpg
 
-import scala.slick.driver.{BasicProfile, PostgresDriver}
+import scala.slick.driver.PostgresDriver
 import scala.slick.lifted._
+import FunctionSymbolExtensionMethods._
 import scala.slick.ast.Library.{SqlFunction, SqlOperator}
 import scala.slick.ast.{Library, Node}
-import scala.slick.session.{PositionedResult, PositionedParameters}
 import scala.collection.convert.{WrapAsJava, WrapAsScala}
 import org.postgresql.util.{HStoreConverter, PGobject}
+import scala.slick.jdbc.{PositionedResult, PositionedParameters, JdbcType}
 
 trait PgHStoreSupport { driver: PostgresDriver =>
+  import driver.profile.simple._
 
   trait HStoreImplicits {
-    implicit val hstoreMapTypeMapper = new HStoreMapTypeMapper
+    implicit val hstoreMapTypeMapper = new HStoreMapJdbcType
 
     implicit def hstoreMapColumnExtensionMethods(c: Column[Map[String, String]])(
-      implicit tm: TypeMapper[Map[String, String]], tm1: TypeMapper[List[String]]) = {
+      implicit tm: JdbcType[Map[String, String]], tm1: JdbcType[List[String]]) = {
     		new HStoreColumnExtensionMethods[Map[String, String]](c)
     	}
     implicit def hstoreMapOptionColumnExtensionMethods(c: Column[Option[Map[String,String]]])(
-      implicit tm: TypeMapper[Map[String, String]], tm1: TypeMapper[List[String]]) = {
+      implicit tm: JdbcType[Map[String, String]], tm1: JdbcType[List[String]]) = {
     		new HStoreColumnExtensionMethods[Option[Map[String, String]]](c)
     	}
   }
@@ -40,54 +42,51 @@ trait PgHStoreSupport { driver: PostgresDriver =>
 
   /** Extension methods for hstore Columns */
   class HStoreColumnExtensionMethods[P1](val c: Column[P1])(
-            implicit tm: TypeMapper[Map[String, String]], tm1: TypeMapper[List[String]])
+            implicit tm: JdbcType[Map[String, String]], tm1: JdbcType[List[String]])
                 extends ExtensionMethods[Map[String, String], P1] {
 
     def +>[P2, R](k: Column[P2])(implicit om: o#arg[String, P2]#to[String, R]) = {
-        om(HStoreLibrary.On.column[String](n, Node(k)))
+        om.column(HStoreLibrary.On, n, Node(k))
       }
-    def >>[T: TypeMapper](k: Column[String]) = {
-        Library.Cast.column[T](HStoreLibrary.On(n, Node(k)))
+    def >>[T: JdbcType](k: Column[String]) = {
+        Library.Cast.column[T](Node(HStoreLibrary.On.column(n, Node(k))))
       }
     def ??[P2, R](k: Column[P2])(implicit om: o#arg[String, P2]#to[Boolean, R]) = {
-        om(HStoreLibrary.Exist.column(n, Node(k)))
+        om.column(HStoreLibrary.Exist, n, Node(k))
       }
     def ?&[P2, R](k: Column[P2])(implicit om: o#arg[String, P2]#to[Boolean, R]) = {
-        om(HStoreLibrary.Defined.column(n, Node(k)))
+        om.column(HStoreLibrary.Defined, n, Node(k))
       }
     def @>[P2, R](c2: Column[P2])(implicit om: o#arg[Map[String, String], P2]#to[Boolean, R]) = {
-        om(HStoreLibrary.Contains.column(n, Node(c2)))
+        om.column(HStoreLibrary.Contains, n, Node(c2))
       }
     def <@:[P2, R](c2: Column[P2])(implicit om: o#arg[Map[String, String], P2]#to[Boolean, R]) = {
-        om(HStoreLibrary.ContainedBy.column(Node(c2), n))
+        om.column(HStoreLibrary.ContainedBy, Node(c2), n)
       }
 
     def @+[P2, R](c2: Column[P2])(implicit om: o#arg[Map[String, String], P2]#to[Map[String, String], R]) = {
-        om(HStoreLibrary.Concatenate.column[Map[String, String]](n, Node(c2)))
+        om.column(HStoreLibrary.Concatenate, n, Node(c2))
       }
     def @-[P2, R](c2: Column[P2])(implicit om: o#arg[String, P2]#to[Map[String, String], R]) = {
-        om(HStoreLibrary.Delete.column[Map[String, String]](n, Node(c2)))
+        om.column(HStoreLibrary.Delete, n, Node(c2))
       }
     def --[P2, R](c2: Column[P2])(implicit om: o#arg[List[String], P2]#to[Map[String, String], R]) = {
-        om(HStoreLibrary.Delete.column[Map[String, String]](n, Node(c2)))
+        om.column(HStoreLibrary.Delete, n, Node(c2))
       }
     def -/[P2, R](c2: Column[P2])(implicit om: o#arg[Map[String, String], P2]#to[Map[String, String], R]) = {
-        om(HStoreLibrary.Delete.column[Map[String, String]](n, Node(c2)))
+        om.column(HStoreLibrary.Delete, n, Node(c2))
       }
   }
 
   ///////////////////////////////////////////////////////////////////////////////////////
 
-  class HStoreMapTypeMapper extends TypeMapperDelegate[Map[String, String]] with BaseTypeMapper[Map[String, String]] {
+  class HStoreMapJdbcType extends DriverJdbcType[Map[String, String]] {
 
-    def apply(v1: BasicProfile): TypeMapperDelegate[Map[String, String]] = this
-
-    //----------------------------------------------------------
     def zero = Map.empty[String, String]
 
     def sqlType = java.sql.Types.OTHER
 
-    def sqlTypeName = "hstore"
+    override def sqlTypeName = "hstore"
 
     def setValue(v: Map[String, String], p: PositionedParameters) = p.setObject(mkPgObject(v), sqlType)
 
