@@ -10,8 +10,7 @@ import scala.reflect.ClassTag
 import org.postgresql.util.PGobject
 import scala.slick.jdbc.{PositionedResult, PositionedParameters, JdbcType}
 
-trait PgArraySupport { driver: PostgresDriver =>
-  import driver.profile.simple._
+trait PgArraySupport extends ImplicitJdbcTypes { driver: PostgresDriver =>
 
   trait ArrayImplicits {
     /** for type/name, @see [[org.postgresql.core.Oid]] and [[org.postgresql.jdbc2.TypeInfoCache]]*/

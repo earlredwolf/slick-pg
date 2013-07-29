@@ -9,8 +9,7 @@ import scala.collection.convert.{WrapAsJava, WrapAsScala}
 import org.postgresql.util.{HStoreConverter, PGobject}
 import scala.slick.jdbc.{PositionedResult, PositionedParameters, JdbcType}
 
-trait PgHStoreSupport { driver: PostgresDriver =>
-  import driver.profile.simple._
+trait PgHStoreSupport extends ImplicitJdbcTypes { driver: PostgresDriver =>
 
   trait HStoreImplicits {
     implicit val hstoreMapTypeMapper = new HStoreMapJdbcType
@@ -49,7 +48,7 @@ trait PgHStoreSupport { driver: PostgresDriver =>
         om.column(HStoreLibrary.On, n, Node(k))
       }
     def >>[T: JdbcType](k: Column[String]) = {
-        Library.Cast.column[T](Node(HStoreLibrary.On.column(n, Node(k))))
+        Library.Cast.column[T](HStoreLibrary.On.typed[String](n, Node(k)))
       }
     def ??[P2, R](k: Column[P2])(implicit om: o#arg[String, P2]#to[Boolean, R]) = {
         om.column(HStoreLibrary.Exist, n, Node(k))

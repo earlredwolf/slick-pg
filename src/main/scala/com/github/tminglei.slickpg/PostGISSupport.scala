@@ -8,11 +8,11 @@ import scala.slick.lifted._
 import scala.slick.ast.Library.{SqlFunction, SqlOperator}
 import scala.slick.ast.{LiteralNode, Node}
 import scala.slick.jdbc.{PositionedResult, PositionedParameters}
+import scala.reflect.ClassTag
 
-trait PostGISSupport { driver: PostgresDriver =>
-  import driver.profile.simple._
+trait PostGISSupport extends ImplicitJdbcTypes { driver: PostgresDriver =>
 
-  private trait GeometryTypesImplicits {
+  trait GeometryTypesImplicits {
     implicit val geometryJdbcType = new GeometryJdbcType[Geometry]
     implicit val pointJdbcType = new GeometryJdbcType[Point]
     implicit val polygonJdbcType = new GeometryJdbcType[Polygon]
@@ -538,7 +538,7 @@ trait PostGISSupport { driver: PostgresDriver =>
 
   //////////////////////////////////////////////////////////////////////////////////
 
-  class GeometryJdbcType[T <: Geometry] extends DriverJdbcType[T] {
+  class GeometryJdbcType[T <: Geometry](implicit ct: ClassTag[T]) extends DriverJdbcType[T] {
     
     def zero: T = null.asInstanceOf[T]
 

@@ -2,6 +2,7 @@ package com.github.tminglei.slickpg
 
 import org.junit._
 import org.junit.Assert._
+import scala.slick.lifted._
 
 class PgArraySupportTest {
   import MyPostgresDriver.simple._
@@ -15,14 +16,16 @@ class PgArraySupportTest {
     strArr: Option[List[String]]
     )
 
-  object ArrayTestTable extends Table[ArrayBean](Some("test"), "ArrayTest") {
+  class ArrayTestTable(tag: Tag) extends Table[ArrayBean](tag, /*Some("test"),*/ "ArrayTest") {
     def id = column[Long]("id", O.AutoInc, O.PrimaryKey)
     def intArr = column[List[Int]]("intArray")
     def longArr = column[List[Long]]("longArray")
     def strArr = column[Option[List[String]]]("stringArray")
 
-    def * = id ~ intArr ~ longArr ~ strArr <> (ArrayBean, ArrayBean unapply _)
+    def * = (id, intArr, longArr, strArr) <> (ArrayBean.tupled, ArrayBean.unapply _)
   }
+
+  val ArrayTableQuery = TableQuery[ArrayTestTable]
 
   //------------------------------------------------------------------------------
 
@@ -33,53 +36,53 @@ class PgArraySupportTest {
   @Test
   def testArrayFunctions(): Unit = {
     db withSession { implicit session: Session =>
-      ArrayTestTable.insert(testRec1)
-      ArrayTestTable.insert(testRec2)
-      ArrayTestTable.insert(testRec3)
+      ArrayTableQuery += testRec1
+      ArrayTableQuery += testRec2
+      ArrayTableQuery += testRec3
 
-      val q1 = ArrayTestTable.where(101.bind === _.intArr.any).sortBy(_.id).map(t => t)
+      val q1 = ArrayTableQuery.where(101.bind === _.intArr.any).sortBy(_.id).map(t => t)
       println(s"'any' sql = ${q1.selectStatement}")
       assertEquals(List(testRec1, testRec2, testRec3), q1.list())
 
-      val q2 = ArrayTestTable.where(5L.bind <= _.longArr.all).sortBy(_.id).map(t => t)
+      val q2 = ArrayTableQuery.where(5L.bind <= _.longArr.all).sortBy(_.id).map(t => t)
       println(s"'all' sql = ${q2.selectStatement}")
       assertEquals(List(testRec2, testRec3), q2.list())
 
       /* notes: use 'Array("str3").bind' instead of 'Array("str3")' */
 //      val q3 = ArrayTestTable.where(_.strArr @> Array("str3")).sortBy(_.id).map(t => t)
-      val q3 = ArrayTestTable.where(_.strArr @> List("str3").bind).sortBy(_.id).map(t => t)
+      val q3 = ArrayTableQuery.where(_.strArr @> List("str3").bind).sortBy(_.id).map(t => t)
       println(s"'@>' sql = ${q3.selectStatement}")
       assertEquals(List(testRec1, testRec2, testRec3), q3.list())
 
-      val q31 = ArrayTestTable.where(List("str3").bind <@: _.strArr).sortBy(_.id).map(t => t)
+      val q31 = ArrayTableQuery.where(List("str3").bind <@: _.strArr).sortBy(_.id).map(t => t)
       println(s"'<@' sql = ${q31.selectStatement}")
       assertEquals(List(testRec1, testRec2, testRec3), q31.list())
 
-      val q4 = ArrayTestTable.where(_.longArr @& List(5L, 17L).bind).sortBy(_.id).map(t => t)
+      val q4 = ArrayTableQuery.where(_.longArr @& List(5L, 17L).bind).sortBy(_.id).map(t => t)
       println(s"'&&' sql = ${q4.selectStatement}")
       assertEquals(List(testRec1, testRec2, testRec3), q4.list())
 
-      val q5 = ArrayTestTable.where(_.longArr.length() > 3.bind).sortBy(_.id).map(t => t)
+      val q5 = ArrayTableQuery.where(_.longArr.length() > 3.bind).sortBy(_.id).map(t => t)
       println(s"'length' sql = ${q5.selectStatement}")
       assertEquals(List(testRec1), q5.list())
 
-      val q6 = ArrayTestTable.where(5L.bind <= _.longArr.all).map(_.strArr.unnest)
+      val q6 = ArrayTableQuery.where(5L.bind <= _.longArr.all).map(_.strArr.unnest)
       println(s"'unnest' sql = ${q6.selectStatement}")
       assertEquals((testRec2.strArr.get ++ testRec3.strArr.get).toList, q6.list().map(_.orNull))
 
-      val q7 = ArrayTestTable.where(_.id === 33L.bind).map(_.intArr ++ List(105, 107).bind)
+      val q7 = ArrayTableQuery.where(_.id === 33L.bind).map(_.intArr ++ List(105, 107).bind)
       println(s"concatenate1 sql = ${q7.selectStatement}")
       assertEquals(List(101, 102, 103, 105, 107), q7.first())
 
-      val q8 = ArrayTestTable.where(_.id === 33L.bind).map(List(105, 107).bind ++ _.intArr)
+      val q8 = ArrayTableQuery.where(_.id === 33L.bind).map(List(105, 107).bind ++ _.intArr)
       println(s"concatenate2 sql = ${q8.selectStatement}")
       assertEquals(List(105, 107, 101, 102, 103), q8.first())
 
-      val q9 = ArrayTestTable.where(_.id === 33L.bind).map(_.intArr + 105.bind)
+      val q9 = ArrayTableQuery.where(_.id === 33L.bind).map(_.intArr + 105.bind)
       println(s"concatenate3 sql = ${q9.selectStatement}")
       assertEquals(List(101, 102, 103, 105), q9.first())
 
-      val q10 = ArrayTestTable.where(_.id === 33L.bind).map(105.bind +: _.intArr)
+      val q10 = ArrayTableQuery.where(_.id === 33L.bind).map(105.bind +: _.intArr)
       println(s"concatenate4 sql = ${q10.selectStatement}")
       assertEquals(List(105, 101, 102, 103), q10.first())
     }
@@ -90,14 +93,14 @@ class PgArraySupportTest {
   @Before
   def createTables(): Unit = {
     db withSession { implicit session: Session =>
-      ArrayTestTable.ddl create
+      ArrayTableQuery.ddl.create
     }
   }
 
   @After
   def dropTables(): Unit = {
     db withSession { implicit session: Session =>
-      ArrayTestTable.ddl drop
+      ArrayTableQuery.ddl.drop
     }
   }
 }

@@ -8,8 +8,7 @@ import scala.slick.ast.Node
 import java.sql.{Date, Time, Timestamp}
 import scala.slick.jdbc.{PositionedResult, PositionedParameters, JdbcType}
 
-trait PgDatetimeSupport { driver: PostgresDriver =>
-  import driver.profile.simple._
+trait PgDatetimeSupport extends ImplicitJdbcTypes { driver: PostgresDriver =>
 
   trait DatetimeImplicits {
     implicit val intervalJdbcType = new IntervalJdbcType

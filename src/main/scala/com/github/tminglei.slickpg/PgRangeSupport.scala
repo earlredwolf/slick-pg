@@ -9,8 +9,7 @@ import scala.slick.ast.{Library, Node}
 import org.postgresql.util.PGobject
 import scala.slick.jdbc.{PositionedResult, PositionedParameters, JdbcType}
 
-trait PgRangeSupport { driver: PostgresDriver =>
-  import driver.profile.simple._
+trait PgRangeSupport extends ImplicitJdbcTypes { driver: PostgresDriver =>
 
   private val tsFormatter = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
   private val dateFormatter = new java.text.SimpleDateFormat("yyyy-MM-dd")
@@ -55,13 +54,13 @@ trait PgRangeSupport { driver: PostgresDriver =>
               implicit tm: JdbcType[B0], tm1: JdbcType[Range[B0]]) extends ExtensionMethods[Range[B0], P1] {
 
     def @>^[P2, R](e: Column[P2])(implicit om: o#arg[B0, P2]#to[Boolean, R]) = {
-        om.column(RangeLibrary.Contains, n, Node(Library.Cast.column(e.nodeDelegate)))
+        om.column(RangeLibrary.Contains, n, Node(Library.Cast.column[B0](e.nodeDelegate)))
       }
     def @>[P2, R](e: Column[P2])(implicit om: o#arg[Range[B0], P2]#to[Boolean, R]) = {
         om.column(RangeLibrary.Contains, n, Node(e))
       }
     def <@^:[P2, R](e: Column[P2])(implicit om: o#arg[B0, P2]#to[Boolean, R]) = {
-        om.column(RangeLibrary.ContainedBy, Node(Library.Cast.column(e.nodeDelegate), n))
+        om.column(RangeLibrary.ContainedBy, Node(Library.Cast.column[B0](e.nodeDelegate)), n)
       }
     def <@:[P2, R](e: Column[P2])(implicit om: o#arg[Range[B0], P2]#to[Boolean, R]) = {
         om.column(RangeLibrary.ContainedBy, Node(e), n)
