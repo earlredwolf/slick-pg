@@ -126,6 +126,9 @@ trait PgDatetimeSupport extends ImplicitJdbcTypes { driver: PostgresDriver =>
         om.column(DatetimeLibrary./, n, Node(factor))
       }
 
+    def part[R](field: Column[String])(implicit om: o#to[Double, R]) = {
+        om.column(DatetimeLibrary.Part, Node(field), n)
+      }
     def justifyDays[R](implicit om: o#to[Interval, R]) = om.column(DatetimeLibrary.JustifyDays, n)
     def justifyHours[R](implicit om: o#to[Interval, R]) = om.column(DatetimeLibrary.JustifyHours, n)
     def justifyInterval[R](implicit om: o#to[Interval, R]) = om.column(DatetimeLibrary.JustifyInterval, n)
