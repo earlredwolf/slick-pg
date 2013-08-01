@@ -34,6 +34,7 @@ trait PgHStoreSupport extends ImplicitJdbcTypes { driver: PostgresDriver =>
     val Defined = new SqlFunction("defined")
     val Contains = new SqlOperator("@>")
     val ContainedBy = new SqlOperator("<@")
+    val AKeys = new SqlFunction("akeys")
 
     val Concatenate = new SqlOperator("||")
     val Delete = new SqlOperator("-")
@@ -62,11 +63,12 @@ trait PgHStoreSupport extends ImplicitJdbcTypes { driver: PostgresDriver =>
     def <@:[P2, R](c2: Column[P2])(implicit om: o#arg[Map[String, String], P2]#to[Boolean, R]) = {
         om.column(HStoreLibrary.ContainedBy, Node(c2), n)
       }
+    def keys[R](implicit om: o#to[List[String], R]) = om.column(HStoreLibrary.AKeys, n)
 
-    def @+[P2, R](c2: Column[P2])(implicit om: o#arg[Map[String, String], P2]#to[Map[String, String], R]) = {
+    def ++[P2, R](c2: Column[P2])(implicit om: o#arg[Map[String, String], P2]#to[Map[String, String], R]) = {
         om.column(HStoreLibrary.Concatenate, n, Node(c2))
       }
-    def @-[P2, R](c2: Column[P2])(implicit om: o#arg[String, P2]#to[Map[String, String], R]) = {
+    def - [P2, R](c2: Column[P2])(implicit om: o#arg[String, P2]#to[Map[String, String], R]) = {
         om.column(HStoreLibrary.Delete, n, Node(c2))
       }
     def --[P2, R](c2: Column[P2])(implicit om: o#arg[List[String], P2]#to[Map[String, String], R]) = {

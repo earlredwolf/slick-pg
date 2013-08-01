@@ -83,12 +83,12 @@ class PgHStoreSupportTest {
       assertEquals(List(testRec2).map(_.hstore), q41.list().map(_.hstore))
 
       ///
-      val q5 = HStoreQuery.where(_.id === 37L).map(t => t.hstore @+ Map("a"->"test").bind)
-      println(s"'@+' sql = ${q5.selectStatement}")
+      val q5 = HStoreQuery.where(_.id === 37L).map(t => t.hstore ++ Map("a"->"test").bind)
+      println(s"'++' sql = ${q5.selectStatement}")
       assertEquals(Map("a"->"test", "c"->"105"), q5.first())
 
-      val q6 = HStoreQuery.where(_.id === 37L).map(t => t.hstore @- "a".bind)
-      println(s"'@-' sql = ${q6.selectStatement}")
+      val q6 = HStoreQuery.where(_.id === 37L).map(t => t.hstore - "a".bind)
+      println(s"'-' sql = ${q6.selectStatement}")
       assertEquals(Map("c"->"105"), q6.first())
 
       val q7 = HStoreQuery.where(_.id === 37L).map(t => t.hstore -- List("a").bind)
@@ -98,6 +98,10 @@ class PgHStoreSupportTest {
       val q8 = HStoreQuery.where(_.id === 37L).map(t => t.hstore -/ Map("a"->"111", "c"->"105").bind)
       println(s"'-/' sql = ${q8.selectStatement}")
       assertEquals(Map("a"->null), q8.first())
+
+      val q9 = HStoreQuery.where(_.id === 33L).map(t => t.hstore.keys)
+      println(s"'keys' sql = ${q9.selectStatement}")
+      assertEquals(List("a","b","c"), q9.first())
     }
   }
 
