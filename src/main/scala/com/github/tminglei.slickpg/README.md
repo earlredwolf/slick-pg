@@ -76,6 +76,7 @@ Supported data type's operators/functions
 | @-                      | -                    | delete key from left operand  | 'a=>1, b=>2, c=>3'::hstore - 'b' | "a"=>"1", "c"=>"3"  |
 | --                      | -                    | delete keys from left operand | 'a=>1, b=>2, c=>3'::hstore - ARRAY['a','b'] | "c"=>"3" |
 | -/                      | -                    | delete matching pairs from left operand | 'a=>1, b=>2, c=>3'::hstore - 'a=>4, b=>2'::hstore | "a"=>"1", "c"=>"3" |
+| keys                    | akeys                | get hstore's keys as an array | akeys('a=>1,b=>2')               | {a,b}  |
 
 #### Search
 | Slick Operator/Function | PG Operator/Function |       Description                |                Example                 |   Result    |
