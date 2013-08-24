@@ -2,7 +2,6 @@ package com.github.tminglei.slickpg
 
 import org.junit._
 import org.junit.Assert._
-import scala.slick.lifted._
 
 class PgArraySupportTest {
   import MyPostgresDriver.simple._
@@ -85,8 +84,57 @@ class PgArraySupportTest {
       val q10 = ArrayTableQuery.where(_.id === 33L.bind).map(105.bind +: _.intArr)
       println(s"concatenate4 sql = ${q10.selectStatement}")
       assertEquals(List(105, 101, 102, 103), q10.first())
+
+      // test array type mapper's 'updateObject' method
+      ArrayTableQuery.where(_.id === 33L.bind).map(r => r).mutate({ m =>
+        m.row = m.row.copy( longArr = List(3, 5, 9))
+      })
+      val q11 = ArrayTableQuery.where(_.id === 33L.bind).map(r => r.longArr)
+      assertEquals(List(3,5,9), q11.first())
     }
   }
+
+  ////////////////////////////////////////////////////////////////////////
+
+  /**
+   * disable it, since postgres jdbc didn't support uuid array now
+   **/
+//  case class ArrayBean1(
+//    id: Long,
+//    uuidArr: List[UUID]
+//    )
+//
+//  object ArrayTestTable1(tag: Tag) extends Table[ArrayBean1](tag, /*Some("test"),*/ "ArrayTest1") {
+//    def id = column[Long]("id", O.AutoInc, O.PrimaryKey)
+//    def uuidArr = column[List[UUID]]("uuidArray")
+//
+//    def * = (id, uuidArr) <> (ArrayBean1.tupled, ArrayBean1.unapply _)
+//  }
+//
+//  val ArrayTableQuery1 = TableQuery[ArrayTestTable1]
+//
+//  //------------------------------------------------------------------------------
+//
+//  val uuid1 = UUID.randomUUID()
+//  val uuid2 = UUID.randomUUID()
+//  val uuid3 = UUID.randomUUID()
+//
+//  val rec1 = ArrayBean1(51L, List(uuid1, uuid2))
+//  val rec2 = ArrayBean1(52L, List(uuid1, uuid2, uuid3))
+//  val rec3 = ArrayBean1(53L, List(uuid1, uuid3))
+//
+//  @Test
+//  def testArrayFunctions1(): Unit = {
+//    db withSession { implicit session: Session =>
+//      ArrayTableQuery1.insert(rec1)
+//      ArrayTableQuery1.insert(rec2)
+//      ArrayTableQuery1.insert(rec3)
+//
+//      val q1 = ArrayTableQuery1.where(_.uuidArr @> List(uuid2).bind).map(t => t)
+//      println(s"uuid '@>' sql = ${q1.selectStatement}")
+//      assertEquals(List(rec1, rec2), q1.list())
+//    }
+//  }
 
   //////////////////////////////////////////////////////////////////////
 
@@ -94,6 +142,7 @@ class PgArraySupportTest {
   def createTables(): Unit = {
     db withSession { implicit session: Session =>
       ArrayTableQuery.ddl.create
+//      ArrayTableQuery1.ddl create
     }
   }
 
@@ -101,6 +150,7 @@ class PgArraySupportTest {
   def dropTables(): Unit = {
     db withSession { implicit session: Session =>
       ArrayTableQuery.ddl.drop
+//      ArrayTableQuery1.ddl drop
     }
   }
 }
