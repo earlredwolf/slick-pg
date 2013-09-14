@@ -27,11 +27,11 @@ trait PostGISSupport extends ImplicitJdbcTypes { driver: PostgresDriver =>
   trait PostGISImplicits extends GeometryTypesImplicits {
     implicit def geometryColumnExtensionMethods[G1 <: Geometry](c: Column[G1])(
       implicit tm: GeometryJdbcType[G1]) = {
-    		new GeometryColumnExtensionMethods[G1](c)
+    		new GeometryColumnExtensionMethods[G1, G1](c)
     	}
     implicit def geometryOptionColumnExtensionMethods[G1 <: Geometry](c: Column[Option[G1]])(
       implicit tm: GeometryJdbcType[G1]) = {
-    		new GeometryColumnExtensionMethods[Option[G1]](c)
+    		new GeometryColumnExtensionMethods[G1, Option[G1]](c)
     	}
   }
 
@@ -206,7 +206,7 @@ trait PostGISSupport extends ImplicitJdbcTypes { driver: PostgresDriver =>
   }
 
   /** Extension methods for hstore Columns */
-  class GeometryColumnExtensionMethods[P1](val c: Column[P1]) extends ExtensionMethods[Geometry, P1] with GeometryTypesImplicits {
+  class GeometryColumnExtensionMethods[G1 <: Geometry, P1](val c: Column[P1]) extends ExtensionMethods[G1, P1] with GeometryTypesImplicits {
     /** Geometry Operators */
     def @&&[P2, R](geom: Column[P2])(implicit om: o#arg[Geometry, P2]#to[Boolean, R]) = {
     		om.column(PostGISLibrary.BoxIntersects, n, Node(geom))

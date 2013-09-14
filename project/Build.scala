@@ -19,7 +19,7 @@ object SlickPgBuild extends Build {
     libraryDependencies := Seq(
       "com.typesafe.slick" % "slick_2.10" % "2.0.0-M2",
       "com.vividsolutions" % "jts" % "1.13",
-      "postgresql" % "postgresql" % "9.2-1002.jdbc4",
+      "org.postgresql" % "postgresql" % "9.2-1003-jdbc4",
       "junit" % "junit" % "4.11" % "test",
       "com.novocode" % "junit-interface" % "0.10" % "test"
     ),

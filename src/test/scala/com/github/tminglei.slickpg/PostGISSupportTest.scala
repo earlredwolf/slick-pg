@@ -52,9 +52,11 @@ class PostGISSupportTest {
       val q3 = GeometryQuery.where(_.geom === geomFromEWKT("SRID=0;POINT(-71.064544 42.28787)".bind)).map(t => t)
       assertEquals(bean, q3.first())
 
-      val q4 = GeometryQuery.where(_.geom === geomFromGML("""<gml:Point>
-                                                            <gml:coordinates>-71.064544,42.28787</gml:coordinates>
-                                                       </gml:Point>""".bind)).map(t => t)
+      val q4 = GeometryQuery.where(_.geom === geomFromGML("""<gml:Point xmlns:gml="http://www.opengis.net/gml">
+                                                              <gml:coordinates>
+                                                                -71.064544,42.28787
+                                                              </gml:coordinates>
+                                                             </gml:Point>""".bind)).map(t => t)
       assertEquals(bean, q4.first())
 
       val q5 = GeometryQuery.where(_.geom === geomFromKML("""<Point>
@@ -63,7 +65,7 @@ class PostGISSupportTest {
       assertEquals(bean, q5.first())
 
       // disable it, since JSON-C not enabled
-//      val q6 = GeomTestTable.where(_.geom === geomFromGeoJSON("""{"type":"Point","coordinates":[-71.064544,42.28787]}""".bind)).map(t => t)
+//      val q6 = GeometryQuery.where(_.geom === geomFromGeoJSON("""{"type":"Point","coordinates":[-71.064544,42.28787]}""".bind)).map(t => t)
 //      assertEquals(bean, q6.first())
 
       val q7 = GeometryQuery.where(_.geom @&& makeBox(point1.bind, point2.bind)).map(t => t)
@@ -325,6 +327,8 @@ class PostGISSupportTest {
 
       val q2 = GeometryQuery.where(_.id === polygonId.bind).map(_.geom.centroid)
       assertEquals(centroid, q2.first())
+      val q21 = GeometryQuery.where(_.id === polygonId.bind).map(r => (r.geom.centroid within r.geom))
+      assertEquals(true, q21.first())
 
       val q3 = GeometryQuery.where(_.id === polygonId.bind).map(_.geom.closestPoint(point2.bind))
       assertEquals(closetPoint, q3.first())
